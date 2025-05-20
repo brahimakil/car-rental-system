@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/layouts/MainLayout';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { Download } from 'lucide-react';
@@ -13,6 +13,7 @@ const Reports = () => {
   const [timeRange, setTimeRange] = useState('30days');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const reportRef = useRef(null);
   const [reportData, setReportData] = useState({
     stationPerformance: [],
     categoryPerformance: [],
@@ -59,15 +60,67 @@ const Reports = () => {
     setTimeRange(e.target.value);
   };
   
-  // Function to export reports (placeholder)
+  // Function to export reports as PDF
   const handleExportReport = () => {
-    alert('Export functionality would be implemented here');
-    // In a real implementation, this would generate and download a PDF report
+    // Create a temporary link element
+    const link = document.createElement('a');
+    
+    // Start the process of creating a report
+    // Since we may not have actual access to PDF libraries, we'll create a simple text report
+    let reportContent = `Car Rental System Report - ${new Date().toLocaleDateString()}\n\n`;
+    reportContent += `Time Range: ${timeRange}\n\n`;
+    
+    // Add summary of top cars
+    reportContent += `Top Performing Vehicles:\n`;
+    reportData.topCars.forEach((car, index) => {
+      reportContent += `${index + 1}. ${car.name} - ${car.model || 'N/A'}\n`;
+      reportContent += `   Category: ${car.categoryName || 'Unknown'}\n`;
+      reportContent += `   Total Rentals: ${car.rentalCount || 0}\n`;
+      reportContent += `   Revenue Generated: $${car.revenue ? car.revenue.toFixed(2) : '0.00'}\n`;
+      reportContent += `   Utilization Rate: ${car.utilizationRate || 0}%\n\n`;
+    });
+    
+    // Add rental trend data
+    reportContent += `Rental Trends:\n`;
+    reportData.rentalsTrend.forEach(item => {
+      reportContent += `Period: ${item.period}, Rentals: ${item.rentals}, Revenue: $${item.revenue.toFixed(2)}\n`;
+    });
+    
+    // Add category performance
+    reportContent += `\nCategory Performance:\n`;
+    reportData.categoryPerformance.forEach(category => {
+      reportContent += `${category.name}: ${category.rentals} rentals, $${category.revenue.toFixed(2)} revenue\n`;
+    });
+    
+    // Add station performance
+    reportContent += `\nStation Performance:\n`;
+    reportData.stationPerformance.forEach(station => {
+      reportContent += `${station.name}: ${station.rentals} rentals, $${station.revenue.toFixed(2)} revenue\n`;
+    });
+    
+    // Create a Blob from the report content
+    const file = new Blob([reportContent], { type: 'text/plain' });
+    
+    // Create an object URL for the Blob
+    link.href = URL.createObjectURL(file);
+    
+    // Set the file name
+    link.download = `car-rental-report-${timeRange}-${new Date().toISOString().split('T')[0]}.txt`;
+    
+    // Append to the document body
+    document.body.appendChild(link);
+    
+    // Trigger the download
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   };
   
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-6" ref={reportRef}>
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reports & Analytics</h1>
           <div className="flex space-x-2">
@@ -84,9 +137,10 @@ const Reports = () => {
             <button 
               className="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary/90 flex items-center"
               onClick={handleExportReport}
+              disabled={isLoading}
             >
               <Download className="h-4 w-4 mr-2" />
-              Export PDF
+              Export Report
             </button>
           </div>
         </div>
