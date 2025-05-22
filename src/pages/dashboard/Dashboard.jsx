@@ -169,6 +169,12 @@ const Dashboard = () => {
             lat: station.latitude,
             lng: station.longitude,
             name: station.name,
+            address: station.address,
+            city: station.city,
+            state: station.state,
+            zipCode: station.zipCode,
+            contactPhone: station.contactPhone,
+            contactEmail: station.contactEmail,
             cars: station.availableCars || 0
           })),
           cars: cars

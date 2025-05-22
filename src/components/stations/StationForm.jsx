@@ -75,70 +75,96 @@ const StationForm = ({ station, onSubmit, onCancel }) => {
         longitude: station.longitude || '',
         categories: station.categories || [],
       });
+    } else {
+      // Reset form data if station is null (e.g., for a new station)
+      setFormData({
+        name: '', address: '', city: '', state: '', zipCode: '',
+        contactPhone: '', contactEmail: '', region: 'North', isActive: true,
+        latitude: '', longitude: '', categories: []
+      });
     }
   }, [station]);
 
-  // Initialize map once DOM is ready
+  // Map Initialization and Cleanup Effect
   useEffect(() => {
-    if (!mapRef.current) return;
+    let timerId = null; // To store the setTimeout ID for cleanup
 
-    // Initialize map only once
-    if (!mapInstance.current) {
-      mapInstance.current = L.map(mapRef.current).setView([40.7128, -74.0060], 13);
-      
+    if (mapRef.current && !mapInstance.current) { // Only initialize if div exists and map not already initialized
+      const newMap = L.map(mapRef.current).setView([40.7128, -74.0060], 13); // Default view
+
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(mapInstance.current);
+      }).addTo(newMap);
 
-      // Add click event to the map
-      mapInstance.current.on('click', function(e) {
+      newMap.on('click', function(e) {
         const { lat, lng } = e.latlng;
-        updateMarker(lat, lng);
+        // updateMarker function is defined below and uses mapInstance.current
+        // setFormData uses a functional update, which is safe.
+        updateMarkerOnMap(lat, lng, newMap); // Pass newMap instance directly
         setFormData(prev => ({
           ...prev,
           latitude: lat.toFixed(6),
           longitude: lng.toFixed(6)
         }));
       });
+
+      mapInstance.current = newMap;
+
+      // Set initial marker and view if coordinates are available from formData (e.g., from editing a station)
+      const initialLat = parseFloat(formData.latitude);
+      const initialLng = parseFloat(formData.longitude);
+      if (!isNaN(initialLat) && !isNaN(initialLng)) {
+        updateMarkerOnMap(initialLat, initialLng, mapInstance.current);
+        mapInstance.current.setView([initialLat, initialLng], 15);
+      }
+
+      // Ensure map is properly sized, especially if in a modal or initially hidden
+      timerId = setTimeout(() => {
+        if (mapInstance.current) { // Check if map still exists
+          mapInstance.current.invalidateSize();
+        }
+      }, 100); // A small delay can help.
     }
 
-    // Ensure map is properly sized
-    setTimeout(() => {
-      mapInstance.current.invalidateSize();
-    }, 100);
-
+    // Cleanup function for when the component unmounts
     return () => {
-      // Cleanup function
+      if (timerId) {
+        clearTimeout(timerId); // Clear the timeout
+      }
       if (mapInstance.current) {
-        mapInstance.current.remove();
+        mapInstance.current.off('click'); // Remove event listeners
+        mapInstance.current.remove(); // Properly remove the map
         mapInstance.current = null;
+      }
+      if (markerRef.current) { // Clear markerRef as well
+        // No need to call markerRef.current.remove() as map.remove() handles layers.
         markerRef.current = null;
       }
     };
-  }, [mapRef.current]);
+  }, []); // Empty dependency array: run this effect only once on mount and clean up on unmount
 
-  // Update marker when coordinates change
+  // Helper function to update marker, ensures it uses the correct map instance
+  const updateMarkerOnMap = (lat, lng, map) => {
+    if (!map) return; // If map isn't available, do nothing
+
+    if (markerRef.current) {
+      map.removeLayer(markerRef.current); // Remove existing marker
+    }
+    markerRef.current = L.marker([lat, lng], { icon: DefaultIcon }).addTo(map); // Add new marker
+  };
+  
+  // Effect to update marker when formData coordinates change (e.g., manual input or station prop update)
   useEffect(() => {
-    if (!mapInstance.current) return;
+    if (!mapInstance.current) return; // Map not initialized yet
 
     const lat = parseFloat(formData.latitude);
     const lng = parseFloat(formData.longitude);
     
     if (!isNaN(lat) && !isNaN(lng)) {
-      updateMarker(lat, lng);
+      updateMarkerOnMap(lat, lng, mapInstance.current);
       mapInstance.current.setView([lat, lng], 15);
     }
-  }, [formData.latitude, formData.longitude]);
-
-  const updateMarker = (lat, lng) => {
-    // Remove existing marker if it exists
-    if (markerRef.current) {
-      mapInstance.current.removeLayer(markerRef.current);
-    }
-    
-    // Add new marker
-    markerRef.current = L.marker([lat, lng], { icon: DefaultIcon }).addTo(mapInstance.current);
-  };
+  }, [formData.latitude, formData.longitude]); // Runs when these specific values change
 
   const validateForm = () => {
     const newErrors = {};
@@ -186,7 +212,6 @@ const StationForm = ({ station, onSubmit, onCancel }) => {
     if (validateForm()) {
       setIsSubmitting(true);
       try {
-        // Convert string values to numbers where needed
         const processedData = {
           ...formData,
           latitude: Number(formData.latitude),
@@ -195,6 +220,7 @@ const StationForm = ({ station, onSubmit, onCancel }) => {
         await onSubmit(processedData);
       } catch (error) {
         console.error('Error submitting form:', error);
+        // Optionally set an error state to display to the user
       } finally {
         setIsSubmitting(false);
       }

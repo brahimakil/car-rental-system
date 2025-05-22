@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { ArrowRight } from 'lucide-react';
 
 const MapView = ({ stations = [], cars = [] }) => {
   const mapRef = useRef(null);
@@ -77,10 +78,28 @@ const MapView = ({ stations = [], cars = [] }) => {
       
       try {
         const marker = L.marker([lat, lng], { icon: stationIcon }).addTo(mapInstance.current);
-        marker.bindPopup(`
-          <div class="font-semibold">${station.name || 'Unnamed Station'}</div>
-          <div>Available Cars: ${station.cars || 0}</div>
-        `);
+        // Updated popup content
+        const popupContent = `
+          <div style="font-family: Arial, sans-serif; font-size: 14px; min-width: 180px;">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px; color: #333;">
+              ${station.name || 'Unnamed Station'}
+            </div>
+            <div style="font-size: 12px; color: #555; margin-bottom: 3px;">
+              ${station.address || 'N/A'}
+            </div>
+            <div style="font-size: 12px; color: #555; margin-bottom: 8px;">
+              ${station.city || 'N/A'}${station.city && station.state ? ', ' : ''}${station.state || ''}
+            </div>
+            <a href="/stations#${station.id}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; text-decoration: none; color: #007bff; font-size: 13px; padding: 5px 0; border-top: 1px solid #eee; margin-top: 5px; width: 100%;">
+              View Details
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 5px;">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </a>
+          </div>
+        `;
+        marker.bindPopup(popupContent);
       } catch (error) {
         console.error(`Error adding marker for station ${station.id}:`, error);
       }
