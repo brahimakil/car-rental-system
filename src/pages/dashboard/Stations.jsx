@@ -3,10 +3,12 @@ import MainLayout from '@/layouts/MainLayout';
 import Modal from '@/components/ui/Modal';
 import StationForm from '@/components/stations/StationForm';
 import { getAllStations, addStation, updateStation, deleteStation } from '@/utils/stationService';
+import { getAllCategories } from '@/utils/categoryService';
 import { MapPinIcon, PencilIcon, TrashIcon } from 'lucide-react';
 
 const Stations = () => {
   const [stations, setStations] = useState([]);
+  const [categoriesMap, setCategoriesMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -19,18 +21,29 @@ const Stations = () => {
   const [filterRegion, setFilterRegion] = useState('All Regions');
 
   useEffect(() => {
-    fetchStations();
+    fetchStationsAndCategories();
   }, []);
 
-  const fetchStations = async () => {
+  const fetchStationsAndCategories = async () => {
     setLoading(true);
     try {
-      const stationsData = await getAllStations();
+      const [stationsData, categoriesData] = await Promise.all([
+        getAllStations(),
+        getAllCategories()
+      ]);
+      
       setStations(stationsData);
+      
+      const catMap = {};
+      categoriesData.forEach(cat => {
+        catMap[cat.id] = cat.name;
+      });
+      setCategoriesMap(catMap);
+      
       setError(null);
     } catch (err) {
-      console.error('Error fetching stations:', err);
-      setError('Failed to load stations. Please try again later.');
+      console.error('Error fetching data:', err);
+      setError('Failed to load stations or categories. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -39,7 +52,7 @@ const Stations = () => {
   const handleAddStation = async (stationData) => {
     try {
       await addStation(stationData);
-      await fetchStations();
+      await fetchStationsAndCategories();
       setIsAddModalOpen(false);
     } catch (err) {
       console.error('Error adding station:', err);
@@ -50,7 +63,7 @@ const Stations = () => {
   const handleEditStation = async (stationData) => {
     try {
       await updateStation(currentStation.id, stationData);
-      await fetchStations();
+      await fetchStationsAndCategories();
       setIsEditModalOpen(false);
       setCurrentStation(null);
     } catch (err) {
@@ -62,7 +75,7 @@ const Stations = () => {
   const handleDeleteStation = async () => {
     try {
       await deleteStation(currentStation.id);
-      await fetchStations();
+      await fetchStationsAndCategories();
       setIsDeleteModalOpen(false);
       setCurrentStation(null);
     } catch (err) {
@@ -162,7 +175,7 @@ const Stations = () => {
                         Region
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Available Cars
+                        Available Categories
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Status
@@ -217,7 +230,9 @@ const Stations = () => {
                             {station.region}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {station.availableCars}
+                            {station.categories && station.categories.length > 0 
+                              ? station.categories.map(catId => categoriesMap[catId] || 'Unknown Category').join(', ')
+                              : 'No categories'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
