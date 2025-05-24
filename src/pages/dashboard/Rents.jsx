@@ -683,6 +683,36 @@ const Rents = () => {
     return '';
   };
 
+  const calculateTotalPayment = (rental) => {
+    // Find the car to get its daily rate
+    const car = cars.find(c => c.id === rental.carId);
+    if (!car || !car.dailyRate) return rental.totalAmount || 0;
+    
+    let startDate, endDate;
+    
+    // Handle different date formats safely
+    try {
+      startDate = rental.startDate?.toDate ? rental.startDate.toDate() : 
+                 rental.startDate ? new Date(rental.startDate) : null;
+               
+      endDate = rental.endDate?.toDate ? rental.endDate.toDate() : 
+               rental.endDate ? new Date(rental.endDate) : null;
+    } catch (error) {
+      console.error('Error converting dates:', error);
+      return rental.totalAmount || 0;
+    }
+    
+    if (!startDate || !endDate) return rental.totalAmount || 0;
+    
+    // Calculate number of days including both start and end dates
+    const diffInTime = endDate.getTime() - startDate.getTime();
+    const diffInDays = Math.ceil(diffInTime / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (diffInDays <= 0) return rental.totalAmount || 0;
+    
+    return car.dailyRate * diffInDays;
+  };
+
   const filteredRentals = rentals.filter(rental => {
     const matchesSearch = searchTerm === '' || 
       rental.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -801,6 +831,9 @@ const Rents = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Payment
                     </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Total Payments
+                    </th>
                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Actions
                     </th>
@@ -853,6 +886,11 @@ const Rents = () => {
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPaymentStatusBadgeClass(rental.paymentStatus)}`}>
                           {rental.paymentStatus}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-white">
+                          ${calculateTotalPayment(rental).toFixed(2)}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button

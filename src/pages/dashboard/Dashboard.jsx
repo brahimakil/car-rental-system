@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/layouts/MainLayout';
 import MapView from '@/components/dashboard/MapView';
 import { 
-  getTotalCarsCount, 
+  getTotalCarsCount,
   getActiveRentalsCount, 
   getCustomersCount, 
   getRevenue,

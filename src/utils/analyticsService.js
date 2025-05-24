@@ -53,6 +53,14 @@ export const getCustomersCount = async () => {
 export const getRevenue = async (startDate, endDate) => {
   try {
     const rentalsCollection = collection(db, 'rentals');
+    const carsCollection = collection(db, 'cars');
+    
+    // Get all cars first to have access to daily rates
+    const carsSnapshot = await getDocs(carsCollection);
+    const cars = {};
+    carsSnapshot.docs.forEach(doc => {
+      cars[doc.id] = { ...doc.data() };
+    });
     
     // Convert dates to Firestore timestamps if needed
     const start = startDate instanceof Date ? Timestamp.fromDate(startDate) : startDate;
@@ -71,12 +79,40 @@ export const getRevenue = async (startDate, endDate) => {
     
     const snapshot = await getDocs(q);
     
-    // Calculate total revenue
+    // Calculate total revenue based on daily rate * number of days
     let totalRevenue = 0;
     snapshot.forEach(doc => {
-      const rentalData = doc.data();
-      if (rentalData.totalAmount) {
-        totalRevenue += Number(rentalData.totalAmount);
+      const rental = doc.data();
+      const car = cars[rental.carId];
+      
+      if (car && car.dailyRate && rental.startDate && rental.endDate) {
+        // Convert dates if needed
+        let rentalStart, rentalEnd;
+        try {
+          rentalStart = rental.startDate?.toDate ? rental.startDate.toDate() : 
+                       rental.startDate ? new Date(rental.startDate) : null;
+          rentalEnd = rental.endDate?.toDate ? rental.endDate.toDate() : 
+                     rental.endDate ? new Date(rental.endDate) : null;
+        } catch (error) {
+          console.error('Error converting dates:', error);
+          totalRevenue += Number(rental.totalAmount || 0); // Fallback to stored amount
+          return;
+        }
+        
+        if (rentalStart && rentalEnd) {
+          const diffInTime = rentalEnd.getTime() - rentalStart.getTime();
+          const diffInDays = Math.ceil(diffInTime / (1000 * 60 * 60 * 24)) + 1;
+          
+          if (diffInDays > 0) {
+            totalRevenue += car.dailyRate * diffInDays;
+          } else {
+            totalRevenue += Number(rental.totalAmount || 0); // Fallback
+          }
+        } else {
+          totalRevenue += Number(rental.totalAmount || 0); // Fallback
+        }
+      } else {
+        totalRevenue += Number(rental.totalAmount || 0); // Fallback
       }
     });
     
@@ -121,15 +157,54 @@ export const getTopPerformingCars = async (count = 5) => {
     const rentalsCollection = collection(db, 'rentals');
     const rentalsSnapshot = await getDocs(rentalsCollection);
     
+    // Get all cars to access daily rates
+    const carsCollection = collection(db, 'cars');
+    const carsSnapshot = await getDocs(carsCollection);
+    const carMap = {};
+    carsSnapshot.docs.forEach(doc => {
+      carMap[doc.id] = { id: doc.id, ...doc.data() };
+    });
+    
     // Count rentals per car and calculate revenue
     const carRentalCount = {};
     const carRevenue = {};
     
     rentalsSnapshot.forEach(doc => {
-      const rentalData = doc.data();
-      if (rentalData.carId) {
-        carRentalCount[rentalData.carId] = (carRentalCount[rentalData.carId] || 0) + 1;
-        carRevenue[rentalData.carId] = (carRevenue[rentalData.carId] || 0) + Number(rentalData.totalAmount || 0);
+      const rental = doc.data();
+      if (rental.carId) {
+        carRentalCount[rental.carId] = (carRentalCount[rental.carId] || 0) + 1;
+        
+        // Calculate revenue based on daily rate * number of days
+        const car = carMap[rental.carId];
+        if (car && car.dailyRate && rental.startDate && rental.endDate) {
+          // Convert dates if needed
+          let rentalStart, rentalEnd;
+          try {
+            rentalStart = rental.startDate?.toDate ? rental.startDate.toDate() : 
+                         rental.startDate ? new Date(rental.startDate) : null;
+            rentalEnd = rental.endDate?.toDate ? rental.endDate.toDate() : 
+                       rental.endDate ? new Date(rental.endDate) : null;
+          } catch (error) {
+            console.error('Error converting dates:', error);
+            carRevenue[rental.carId] = (carRevenue[rental.carId] || 0) + Number(rental.totalAmount || 0);
+            return;
+          }
+          
+          if (rentalStart && rentalEnd) {
+            const diffInTime = rentalEnd.getTime() - rentalStart.getTime();
+            const diffInDays = Math.ceil(diffInTime / (1000 * 60 * 60 * 24)) + 1;
+            
+            if (diffInDays > 0) {
+              carRevenue[rental.carId] = (carRevenue[rental.carId] || 0) + (car.dailyRate * diffInDays);
+            } else {
+              carRevenue[rental.carId] = (carRevenue[rental.carId] || 0) + Number(rental.totalAmount || 0);
+            }
+          } else {
+            carRevenue[rental.carId] = (carRevenue[rental.carId] || 0) + Number(rental.totalAmount || 0);
+          }
+        } else {
+          carRevenue[rental.carId] = (carRevenue[rental.carId] || 0) + Number(rental.totalAmount || 0);
+        }
       }
     });
     
@@ -138,19 +213,9 @@ export const getTopPerformingCars = async (count = 5) => {
       .sort((a, b) => carRentalCount[b] - carRentalCount[a])
       .slice(0, count);
     
-    // Get car details
-    const carsCollection = collection(db, 'cars');
-    const carsSnapshot = await getDocs(carsCollection);
-    
     // Get category details
     const categoriesCollection = collection(db, 'categories');
     const categoriesSnapshot = await getDocs(categoriesCollection);
-    
-    // Create maps for faster lookups
-    const carMap = {};
-    carsSnapshot.forEach(doc => {
-      carMap[doc.id] = { id: doc.id, ...doc.data() };
-    });
     
     const categoryMap = {};
     categoriesSnapshot.forEach(doc => {
@@ -194,18 +259,57 @@ export const getStationPerformance = async () => {
       revenue: 0
     }));
     
+    // Get all cars to access daily rates
+    const carsCollection = collection(db, 'cars');
+    const carsSnapshot = await getDocs(carsCollection);
+    const cars = {};
+    carsSnapshot.docs.forEach(doc => {
+      cars[doc.id] = { ...doc.data() };
+    });
+    
     // Get all rentals
     const rentalsCollection = collection(db, 'rentals');
     const rentalsSnapshot = await getDocs(rentalsCollection);
     
     // Calculate statistics per station
     rentalsSnapshot.forEach(doc => {
-      const rentalData = doc.data();
-      if (rentalData.pickupStationId) {
-        const stationIndex = stations.findIndex(s => s.id === rentalData.pickupStationId);
+      const rental = doc.data();
+      if (rental.pickupStationId) {
+        const stationIndex = stations.findIndex(s => s.id === rental.pickupStationId);
         if (stationIndex !== -1) {
           stations[stationIndex].rentals += 1;
-          stations[stationIndex].revenue += Number(rentalData.totalAmount || 0);
+          
+          // Calculate revenue based on daily rate * number of days
+          const car = cars[rental.carId];
+          if (car && car.dailyRate && rental.startDate && rental.endDate) {
+            // Convert dates if needed
+            let rentalStart, rentalEnd;
+            try {
+              rentalStart = rental.startDate?.toDate ? rental.startDate.toDate() : 
+                           rental.startDate ? new Date(rental.startDate) : null;
+              rentalEnd = rental.endDate?.toDate ? rental.endDate.toDate() : 
+                         rental.endDate ? new Date(rental.endDate) : null;
+            } catch (error) {
+              console.error('Error converting dates:', error);
+              stations[stationIndex].revenue += Number(rental.totalAmount || 0);
+              return;
+            }
+            
+            if (rentalStart && rentalEnd) {
+              const diffInTime = rentalEnd.getTime() - rentalStart.getTime();
+              const diffInDays = Math.ceil(diffInTime / (1000 * 60 * 60 * 24)) + 1;
+              
+              if (diffInDays > 0) {
+                stations[stationIndex].revenue += car.dailyRate * diffInDays;
+              } else {
+                stations[stationIndex].revenue += Number(rental.totalAmount || 0);
+              }
+            } else {
+              stations[stationIndex].revenue += Number(rental.totalAmount || 0);
+            }
+          } else {
+            stations[stationIndex].revenue += Number(rental.totalAmount || 0);
+          }
         }
       }
     });
