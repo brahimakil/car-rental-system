@@ -7,7 +7,8 @@ import { auth } from '@/utils/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const MainLayout = ({ children }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Start with sidebar open on desktop, closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   
@@ -21,6 +22,20 @@ const MainLayout = ({ children }) => {
     
     return () => unsubscribe();
   }, [navigate]);
+
+  // Handle window resize to adjust sidebar state
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(true); // Auto-open on desktop
+      } else {
+        setSidebarOpen(false); // Auto-close on mobile
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -38,7 +53,10 @@ const MainLayout = ({ children }) => {
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar isOpen={sidebarOpen} />
       
-      <div className="flex-1 flex flex-col overflow-hidden pt-16 md:pl-64">
+      {/* Adjust the main content area based on sidebar state */}
+      <div className={`flex-1 flex flex-col overflow-hidden pt-16 transition-all duration-300 ${
+        sidebarOpen ? 'ml-64' : 'ml-0'
+      }`}>
         <Header toggleSidebar={toggleSidebar} />
         
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
