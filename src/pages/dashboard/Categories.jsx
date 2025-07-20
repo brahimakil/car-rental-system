@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/layouts/MainLayout';
 import Modal from '@/components/ui/Modal';
 import { getAllCategories, addCategory, updateCategory, deleteCategory } from '@/utils/categoryService';
+import { getAllCars } from '@/utils/carService';
 import { PencilIcon, TrashIcon } from 'lucide-react';
 
 const CategoryForm = ({ category, onSubmit, onCancel }) => {
@@ -201,6 +202,7 @@ const CategoryForm = ({ category, onSubmit, onCancel }) => {
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
+  const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -216,15 +218,34 @@ const Categories = () => {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const categoriesData = await getAllCategories();
+      const [categoriesData, carsData] = await Promise.all([
+        getAllCategories(),
+        getAllCars()
+      ]);
       setCategories(categoriesData);
+      setCars(carsData);
       setError(null);
     } catch (err) {
-      console.error('Error fetching categories:', err);
+      console.error('Error fetching data:', err);
       setError('Failed to load categories. Please try again later.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to calculate available cars for a category
+  const getAvailableCarsCount = (categoryId) => {
+    return cars.filter(car => 
+      car.categoryId === categoryId && 
+      car.status === 'Available'
+    ).length;
+  };
+
+  // Helper function to calculate total rentals for a category (if you have rental data)
+  const getTotalRentalsCount = (categoryId) => {
+    // For now, return the stored value or 0
+    // You can implement actual rental counting later
+    return cars.filter(car => car.categoryId === categoryId).length;
   };
 
   const handleAddCategory = async (categoryData) => {
@@ -308,57 +329,62 @@ const Categories = () => {
                   No categories found. Add a new category to get started.
                 </div>
               ) : (
-                categories.map((category) => (
-                  <div key={category.id} className="bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                      <div className="flex items-center space-x-3">
-                        {category.icon && (
-                          <div className="flex-shrink-0 h-8 w-8 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden">
-                            <img src={category.icon} alt={category.name} className="h-full w-full object-contain" />
-                          </div>
-                        )}
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{category.name}</h3>
+                categories.map((category) => {
+                  const availableCars = getAvailableCarsCount(category.id);
+                  const totalCars = getTotalRentalsCount(category.id);
+                  
+                  return (
+                    <div key={category.id} className="bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                          {category.icon && (
+                            <div className="flex-shrink-0 h-8 w-8 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden">
+                              <img src={category.icon} alt={category.name} className="h-full w-full object-contain" />
+                            </div>
+                          )}
+                          <h3 className="font-semibold text-gray-900 dark:text-white">{category.name}</h3>
+                        </div>
+                        <div className="flex space-x-1">
+                          <button 
+                            onClick={() => openEditModal(category)}
+                            className="p-1 text-primary hover:text-primary/80"
+                          >
+                            <PencilIcon className="h-5 w-5" />
+                          </button>
+                          <button 
+                            onClick={() => openDeleteModal(category)}
+                            className="p-1 text-red-600 hover:text-red-800 dark:text-red-500 dark:hover:text-red-700"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex space-x-1">
-                        <button 
-                          onClick={() => openEditModal(category)}
-                          className="p-1 text-primary hover:text-primary/80"
-                        >
-                          <PencilIcon className="h-5 w-5" />
-                        </button>
-                        <button 
-                          onClick={() => openDeleteModal(category)}
-                          className="p-1 text-red-600 hover:text-red-800 dark:text-red-500 dark:hover:text-red-700"
-                        >
-                          <TrashIcon className="h-5 w-5" />
-                        </button>
+                      <div className="p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          {category.description && (
+                            <div className="mb-3">
+                              <p className="text-sm text-gray-500 dark:text-gray-400">{category.description}</p>
+                            </div>
+                          )}
+                          <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                            <span>Available Cars:</span>
+                            <span className="font-medium text-green-600 dark:text-green-400">{availableCars}</span>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <span>Total Cars:</span>
+                            <span className="font-medium">{totalCars}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-t border-gray-100 dark:border-gray-800">
+                            <span>Status:</span>
+                            <span className={`font-medium ${category.isActive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {category.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="p-4">
-                      <div className="text-sm text-gray-600 dark:text-gray-300">
-                        {category.description && (
-                          <div className="mb-3">
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{category.description}</p>
-                          </div>
-                        )}
-                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                          <span>Available Cars:</span>
-                          <span className="font-medium">{category.availableCars || 0}</span>
-                        </div>
-                        <div className="flex justify-between py-2">
-                          <span>Total Rentals:</span>
-                          <span className="font-medium">{category.totalRentals || 0}</span>
-                        </div>
-                        <div className="flex justify-between py-2 border-t border-gray-100 dark:border-gray-800">
-                          <span>Status:</span>
-                          <span className={`font-medium ${category.isActive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {category.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
